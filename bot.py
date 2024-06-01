@@ -1,5 +1,5 @@
-from telegram import Update
-from telegram.ext import Application, CommandHandler, CallbackContext
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, CallbackContext
 import mysql.connector
 import re
 from fuzzywuzzy import fuzz
@@ -35,7 +35,7 @@ def delete_user_or_staff(user_type, user_id):
 
 # Define functions for CRUD operations
 def add_question(user_id, question_text):
-    cursor.execute("INSERT INTO Question (user_id, question_text, status, created_at, like_count, dislike_count) VALUES (%s, %s, %s, NOW(), 0, 0)", 
+    cursor.execute("INSERT INTO Question (user_id, question_text, status, created_at) VALUES (%s, %s, %s, NOW())", 
                    (user_id, question_text, 'pending'))
     db.commit()
     return cursor.lastrowid
@@ -48,9 +48,11 @@ def update_question_status(question_id, status):
     cursor.execute("UPDATE Question SET status = %s WHERE id = %s", (status, question_id))
     db.commit()
 
-def add_video(question_id, video_link, title, description):
-    cursor.execute("INSERT INTO Video (question_id, video_link, title, description) VALUES (%s, %s, %s, %s)",
-                   (question_id, video_link, title, description))
+def add_video(question_id, video_link, title, description, staff_id):
+    cursor.execute(
+        "INSERT INTO Video (question_id, video_link, title, description, staff_id) VALUES (%s, %s, %s, %s, %s)", 
+        (question_id, video_link, title, description, staff_id)
+    )
     db.commit()
 
 def get_video_for_question(question_id):
@@ -64,37 +66,6 @@ def get_staff_chat_ids():
 def get_pending_questions():
     cursor.execute("SELECT id, question_text, created_at FROM Question WHERE status = 'pending' ORDER BY created_at")
     return cursor.fetchall()
-
-def update_feedback(question_id, feedback):
-    if feedback == 'like':
-        cursor.execute("UPDATE Question SET like_count = like_count + 1 WHERE id = %s", (question_id,))
-    elif feedback == 'dislike':
-        cursor.execute("UPDATE Question SET dislike_count = dislike_count + 1 WHERE id = %s", (question_id,))
-    db.commit()
-
-
-def get_dislike_count(question_id):
-    cursor.execute("SELECT dislike_count FROM Question WHERE id = %s", (question_id,))
-    return cursor.fetchone()[0]
-
-def notify_next_staff_or_admin(question_id):
-    staff_chat_ids = get_staff_chat_ids()
-    if staff_chat_ids:
-        for chat_id in staff_chat_ids:
-            if chat_id:
-                try:
-                    context.bot.send_message(chat_id, f'New question from user:\nQuestion ID: {question_id}\nThis question has been disliked multiple times and needs your attention.')
-                except telegram.error.BadRequest as e:
-                    print(f"Failed to send message to chat_id {chat_id}: {e}")
-    else:
-        # Notify admin if no staff available
-        admin_chat_ids = [admin[1] for admin in list_users_or_staff('admin')]
-        for chat_id in admin_chat_ids:
-            if chat_id:
-                try:
-                    context.bot.send_message(chat_id, f'Unresolved question from user:\nQuestion ID: {question_id}\nThis question has been disliked multiple times and needs your attention.')
-                except telegram.error.BadRequest as e:
-                    print(f"Failed to send message to admin chat_id {chat_id}: {e}")
 
 # Define command handlers
 async def start(update: Update, context: CallbackContext) -> None:
@@ -170,53 +141,40 @@ async def ask_question(update: Update, context: CallbackContext) -> None:
     user_id = context.user_data['user_id']
     question_id = add_question(user_id, question_text)
 
-    # Fetch all videos from the database
     cursor.execute("SELECT video_link, title, description FROM Video")
     videos = cursor.fetchall()
 
-    best_match = None
-    best_similarity = 0
+    similar_videos = [
+        (video_link, title, description) for video_link, title, description in videos
+        if calculate_similarity(question_text, title) > 60 or calculate_similarity(question_text, description) > 60
+    ]
 
-    for video in videos:
-        video_link, title, description = video
-        title_similarity = calculate_similarity(question_text, title)
-        description_similarity = calculate_similarity(question_text, description)
+    response_message = f"Your question has been submitted with ID {question_id}."
+    if similar_videos:
+        response_message += "\n\nSimilar videos:\n"
+        for video_link, title, description in similar_videos:
+            response_message += f"\nTitle: {title}\nDescription: {description}\nLink: {video_link}\n"
 
-        # Check similarity with title and description
-        if title_similarity > best_similarity:
-            best_similarity = title_similarity
-            best_match = video
-        
-        if description_similarity > best_similarity:
-            best_similarity = description_similarity
-            best_match = video
+    staff_chat_ids = get_staff_chat_ids()
+    for chat_id in staff_chat_ids:
+        await context.bot.send_message(chat_id, f'New question (ID: {question_id}): {question_text}')
 
-    if best_match and best_similarity >= 35:
-        video_link, title, description = best_match
-        update_question_status(question_id, 'answered')
-        await update.message.reply_text(f'Answer found: {title}\n{description}\n{video_link}')
-    else:
-        staff_chat_ids = get_staff_chat_ids()
-        print(f"Staff chat_ids: {staff_chat_ids}")  # Debugging line
-        for chat_id in staff_chat_ids:
-            if chat_id:  # Ensure chat_id is valid
-                try:
-                    await context.bot.send_message(chat_id, f'New question from user:\nQuestion ID: {question_id}\nQuestion: {question_text}')
-                except telegram.error.BadRequest as e:
-                    print(f"Failed to send message to chat_id {chat_id}: {e}")  # Debugging line
-        await update.message.reply_text('Your question has been submitted to the staff and is pending review.')
+    await update.message.reply_text(response_message)
 
-async def answer_question(update: Update, context: CallbackContext) -> None:
+async def view_pending_questions(update: Update, context: CallbackContext) -> None:
     if 'user_id' not in context.user_data or context.user_data.get('role') != 'staff':
-        await update.message.reply_text('You must be logged in as a staff to answer questions.')
+        await update.message.reply_text('You must be logged in as staff to view pending questions.')
         return
 
-    question_id = get_next_pending_question()
-    if question_id:
-        question_text = get_question_text(question_id)
-        await update.message.reply_text(f'Next pending question (ID: {question_id}):\n{question_text}')
+    pending_questions = get_pending_questions()
+    if pending_questions:
+        response_message = "Pending questions:\n"
+        for question_id, question_text, created_at in pending_questions:
+            response_message += f"\nID: {question_id}\nQuestion: {question_text}\nCreated at: {created_at}\n"
     else:
-        await update.message.reply_text('There are no pending questions.')
+        response_message = "There are no pending questions."
+
+    await update.message.reply_text(response_message)
 
 async def provide_answer(update: Update, context: CallbackContext) -> None:
     if 'user_id' not in context.user_data or context.user_data.get('role') != 'staff':
@@ -239,199 +197,194 @@ async def provide_answer(update: Update, context: CallbackContext) -> None:
         title = match.group(1)
         description = match.group(2)
 
-        add_video(question_id, video_link, title, description)
+        staff_id = context.user_data['user_id']  # Retrieve the current staff ID from the context data
+
+        add_video(question_id, video_link, title, description, staff_id)
         update_question_status(question_id, 'answered')
 
         cursor.execute("SELECT user_id FROM Question WHERE id = %s", (question_id,))
         user_id = cursor.fetchone()[0]
         cursor.execute("SELECT chat_id FROM User WHERE id = %s", (user_id,))
         user_chat_id = cursor.fetchone()[0]
-        await context.bot.send_message(user_chat_id, f'Your question has been answered: {title}\n{description}\n{video_link}\n\nPlease provide your feedback using /feedback {question_id} like or /feedback {question_id} dislike.')
+
+        keyboard = [
+            [InlineKeyboardButton("👍 Like", callback_data=f'like:{question_id}'), InlineKeyboardButton("👎 Dislike", callback_data=f'dislike:{question_id}')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await context.bot.send_message(user_chat_id, f'Your question has been answered: {title}\n{description}\n{video_link}\n\nPlease provide your feedback:', reply_markup=reply_markup)
 
         await update.message.reply_text('Answer has been submitted.')
 
     except Exception as e:
         await update.message.reply_text(f'Error providing answer: {str(e)}')
 
-async def view_pending_questions(update: Update, context: CallbackContext) -> None:
-    if 'user_id' not in context.user_data or context.user_data.get('role') != 'staff':
-        await update.message.reply_text('You must be logged in as a staff to view pending questions.')
-        return
 
-    pending_questions = get_pending_questions()
-    if pending_questions:
-        response = "\n\n".join([f"ID: {qid}, Question: {text}, Timestamp: {timestamp}" for qid, text, timestamp in pending_questions])
+async def feedback_callback(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    feedback, question_id = query.data.split(':')
+    question_id = int(question_id)
+
+    update_feedback(question_id, feedback)
+
+    original_message = query.message.text
+    feedback_response = ""
+
+    if feedback == 'dislike':
+        dislike_count = get_dislike_count(question_id)
+        if dislike_count >= 2:
+            notify_next_staff_or_admin(question_id, context)
+            feedback_response = '\n\nYour feedback has been recorded and the question will be reviewed by another staff member or admin.'
+        else:
+            feedback_response = '\n\nYour feedback has been recorded. We will review the answer.'
     else:
-        response = 'No pending questions.'
-    
-    await update.message.reply_text(response)
+        feedback_response = '\n\nThank you for your feedback!'
 
-# Admin-related commands
+    await query.edit_message_text(original_message + feedback_response)
+    await query.answer()
+
+def update_feedback(question_id, feedback):
+    if feedback == 'like':
+        cursor.execute("UPDATE Video SET like_count = like_count + 1 WHERE question_id = %s", (question_id,))
+    elif feedback == 'dislike':
+        cursor.execute("UPDATE Video SET dislike_count = dislike_count + 1 WHERE question_id = %s", (question_id,))
+    db.commit()
+
+def get_dislike_count(question_id):
+    cursor.execute("SELECT dislike_count FROM Video WHERE question_id = %s", (question_id,))
+    result = cursor.fetchone()
+    return result[0] if result else 0
+
+def notify_next_staff_or_admin(question_id, context):
+    cursor.execute("SELECT id FROM Staff WHERE dislike_count < 2 LIMIT 1")
+    next_staff = cursor.fetchone()
+
+    if next_staff:
+        next_staff_id = next_staff[0]
+        cursor.execute("SELECT chat_id FROM Staff WHERE id = %s", (next_staff_id,))
+        chat_id = cursor.fetchone()[0]
+        cursor.execute("SELECT question_text FROM Question WHERE id = %s", (question_id,))
+        question_text = cursor.fetchone()[0]
+        context.bot.send_message(chat_id, f'Pending review question ID: {question_id}\nQuestion: {question_text}')
+    else:
+        cursor.execute("SELECT chat_id FROM Admin LIMIT 1")
+        admin_chat_id = cursor.fetchone()[0]
+        cursor.execute("SELECT question_text FROM Question WHERE id = %s", (question_id,))
+        question_text = cursor.fetchone()[0]
+        context.bot.send_message(admin_chat_id, f'No staff available to review question ID: {question_id}\nQuestion: {question_text}')
+    db.commit()
+
+# Define admin command handlers
 async def create_user(update: Update, context: CallbackContext) -> None:
-    if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('Only admins can create users.')
-        return
-
     args = context.args
     if len(args) != 2:
         await update.message.reply_text('Usage: /create_user <phone_number> <password>')
         return
 
     phone_number, password = args
-    create_user_or_staff('user', phone_number, password)
-    await update.message.reply_text('User created successfully.')
+    try:
+        create_user_or_staff('user', phone_number, password)
+        await update.message.reply_text('User created successfully.')
+    except Exception as e:
+        await update.message.reply_text(f'Error creating user: {str(e)}')
 
 async def create_staff(update: Update, context: CallbackContext) -> None:
-    if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('Only admins can create staff.')
-        return
-
     args = context.args
     if len(args) != 2:
         await update.message.reply_text('Usage: /create_staff <phone_number> <password>')
         return
 
     phone_number, password = args
-    create_user_or_staff('staff', phone_number, password)
-    await update.message.reply_text('Staff created successfully.')
+    try:
+        create_user_or_staff('staff', phone_number, password)
+        await update.message.reply_text('Staff created successfully.')
+    except Exception as e:
+        await update.message.reply_text(f'Error creating staff: {str(e)}')
 
 async def create_admin(update: Update, context: CallbackContext) -> None:
-    if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('Only admins can create admins.')
-        return
-
     args = context.args
     if len(args) != 2:
         await update.message.reply_text('Usage: /create_admin <phone_number> <password>')
         return
 
     phone_number, password = args
-    create_user_or_staff('admin', phone_number, password)
-    await update.message.reply_text('Admin created successfully.')
+    try:
+        create_user_or_staff('admin', phone_number, password)
+        await update.message.reply_text('Admin created successfully.')
+    except Exception as e:
+        await update.message.reply_text(f'Error creating admin: {str(e)}')
 
 async def list_users(update: Update, context: CallbackContext) -> None:
-    if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('Only admins can list users.')
-        return
-
     users = list_users_or_staff('user')
-    user_list = "\n".join([f"ID: {user_id}, Phone: {phone_number}" for user_id, phone_number in users])
-    await update.message.reply_text(f"Users:\n{user_list}")
+    response_message = "Users:\n"
+    for user_id, phone_number in users:
+        response_message += f"ID: {user_id}, Phone: {phone_number}\n"
+    await update.message.reply_text(response_message)
 
 async def list_staff(update: Update, context: CallbackContext) -> None:
-    if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('Only admins can list staff.')
-        return
-
-    staff = list_users_or_staff('staff')
-    staff_list = "\n".join([f"ID: {staff_id}, Phone: {phone_number}" for staff_id, phone_number in staff])
-    await update.message.reply_text(f"Staff:\n{staff_list}")
+    staff_members = list_users_or_staff('staff')
+    response_message = "Staff members:\n"
+    for staff_id, phone_number in staff_members:
+        response_message += f"ID: {staff_id}, Phone: {phone_number}\n"
+    await update.message.reply_text(response_message)
 
 async def list_admins(update: Update, context: CallbackContext) -> None:
-    if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('Only admins can list admins.')
-        return
-
     admins = list_users_or_staff('admin')
-    admin_list = "\n".join([f"ID: {admin_id}, Phone: {phone_number}" for admin_id, phone_number in admins])
-    await update.message.reply_text(f"Admins:\n{admin_list}")
+    response_message = "Admins:\n"
+    for admin_id, phone_number in admins:
+        response_message += f"ID: {admin_id}, Phone: {phone_number}\n"
+    await update.message.reply_text(response_message)
 
 async def remove_user(update: Update, context: CallbackContext) -> None:
-    if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('Only admins can remove users.')
-        return
-
     args = context.args
     if len(args) != 1:
         await update.message.reply_text('Usage: /remove_user <user_id>')
         return
 
-    user_id = args[0]
-    delete_user_or_staff('user', user_id)
-    await update.message.reply_text('User removed successfully.')
+    user_id = int(args[0])
+    try:
+        delete_user_or_staff('user', user_id)
+        await update.message.reply_text('User removed successfully.')
+    except Exception as e:
+        await update.message.reply_text(f'Error removing user: {str(e)}')
 
 async def remove_staff(update: Update, context: CallbackContext) -> None:
-    if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('Only admins can remove staff.')
-        return
-
     args = context.args
     if len(args) != 1:
         await update.message.reply_text('Usage: /remove_staff <staff_id>')
         return
 
-    staff_id = args[0]
-    delete_user_or_staff('staff', staff_id)
-    await update.message.reply_text('Staff removed successfully.')
+    staff_id = int(args[0])
+    try:
+        delete_user_or_staff('staff', staff_id)
+        await update.message.reply_text('Staff removed successfully.')
+    except Exception as e:
+        await update.message.reply_text(f'Error removing staff: {str(e)}')
 
 async def remove_admin(update: Update, context: CallbackContext) -> None:
-    if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('Only admins can remove admins.')
-        return
-
     args = context.args
     if len(args) != 1:
         await update.message.reply_text('Usage: /remove_admin <admin_id>')
         return
 
-    admin_id = args[0]
-    delete_user_or_staff('admin', admin_id)
-    await update.message.reply_text('Admin removed successfully.')
-
-# Helper functions
-def get_next_pending_question():
-    cursor.execute("SELECT id FROM Question WHERE status = 'pending' ORDER BY created_at LIMIT 1")
-    result = cursor.fetchone()
-    return result[0] if result else None
-
-async def give_feedback(update: Update, context: CallbackContext) -> None:
-    if 'user_id' not in context.user_data or context.user_data.get('role') != 'user':
-        await update.message.reply_text('You must be logged in as a user to give feedback.')
-        return
-
-    if len(context.args) != 2:
-        await update.message.reply_text('Usage: /feedback <question_id> <like|dislike>')
-        return
-
+    admin_id = int(args[0])
     try:
-        question_id = int(context.args[0])
-        feedback = context.args[1]
-
-        if feedback not in ['like', 'dislike']:
-            await update.message.reply_text('Feedback must be "like" or "dislike".')
-            return
-
-        update_feedback(question_id, feedback)
-
-        if feedback == 'dislike':
-            dislike_count = get_dislike_count(question_id)
-            if dislike_count >= 2:
-                notify_next_staff_or_admin(question_id)
-                await update.message.reply_text('Your feedback has been recorded and the question will be reviewed by another staff member or admin.')
-            else:
-                await update.message.reply_text('Your feedback has been recorded. We will review the answer.')
-        else:
-            await update.message.reply_text('Thank you for your feedback!')
-
+        delete_user_or_staff('admin', admin_id)
+        await update.message.reply_text('Admin removed successfully.')
     except Exception as e:
-        await update.message.reply_text(f'Error giving feedback: {str(e)}')
+        await update.message.reply_text(f'Error removing admin: {str(e)}')
 
-def get_question_text(question_id):
-    cursor.execute("SELECT question_text FROM Question WHERE id = %s", (question_id,))
-    result = cursor.fetchone()
-    return result[0] if result else None
-
-# Set up the application
-def main():
+def main() -> None:
     application = Application.builder().token("7134060419:AAHCcn5_DZ5C8P7a2gu0PhZE--Ij4AN2dbg").build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("login", login))
     application.add_handler(CommandHandler("ask", ask_question))
-    application.add_handler(CommandHandler("answer", answer_question))
-    application.add_handler(CommandHandler("provide_answer", provide_answer))
     application.add_handler(CommandHandler("view_pending_questions", view_pending_questions))
+    application.add_handler(CommandHandler("provide_answer", provide_answer))
+    application.add_handler(CallbackQueryHandler(feedback_callback))
+
     application.add_handler(CommandHandler("create_user", create_user))
     application.add_handler(CommandHandler("create_staff", create_staff))
     application.add_handler(CommandHandler("create_admin", create_admin))
@@ -441,9 +394,8 @@ def main():
     application.add_handler(CommandHandler("remove_user", remove_user))
     application.add_handler(CommandHandler("remove_staff", remove_staff))
     application.add_handler(CommandHandler("remove_admin", remove_admin))
-    application.add_handler(CommandHandler("feedback", give_feedback))
 
     application.run_polling()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
