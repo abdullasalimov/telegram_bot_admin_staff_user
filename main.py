@@ -54,8 +54,6 @@ def add_video(question_id, video_link, title, description, staff_id):
         "INSERT INTO Video (question_id, video_link, title, description, staff_id) VALUES (%s, %s, %s, %s, %s)", 
         (question_id, video_link, title, description, staff_id)
     )
-    # Increment total questions received count for the staff member
-    cursor.execute("UPDATE Staff SET total_questions_received = total_questions_received + 1 WHERE id = %s", (staff_id,))
     db.commit()
 
 def get_video_for_question(question_id):
@@ -108,7 +106,7 @@ async def help_command(update: Update, context: CallbackContext) -> None:
     elif role == 'staff':
         commands = (
             "/login phone_number password\n"
-            "/provide_answer question_id video_link \"title\" \"description\"\n"
+            "/provide_videolink question_id video_link \"title\" \"description\"\n"
             "/view_pending_questions\n"
         )
     elif role == 'user':
@@ -211,20 +209,25 @@ async def view_pending_questions(update: Update, context: CallbackContext) -> No
         response_message += f"\nID: {question_id}\nQuestion: {question_text}\nAsked on: {created_at}\n"
     await update.message.reply_text(response_message)
 
-async def provide_answer(update: Update, context: CallbackContext) -> None:
+import re
+
+async def provide_videolink(update: Update, context: CallbackContext) -> None:
     if 'user_id' not in context.user_data or context.user_data.get('role') != 'staff':
         await update.message.reply_text('You must be logged in as staff to provide an answer.')
         return
 
-    args = context.args
-    if len(args) < 4:
-        await update.message.reply_text('Usage: /provide_answer <question_id> <video_link> "title" "description"')
+    # Extract arguments with regex for title and description in double quotes
+    text = update.message.text
+    match = re.match(r'^/provide_videolink (\d+) (\S+) "([^"]+)" "([^"]+)"$', text)
+    
+    if not match:
+        await update.message.reply_text('Usage: /provide_videolink <question_id> <video_link> "title" "description"')
         return
 
-    question_id = int(args[0])
-    video_link = args[1]
-    title = args[2]
-    description = args[3]
+    question_id = int(match.group(1))
+    video_link = match.group(2)
+    title = match.group(3)
+    description = match.group(4)
     staff_id = context.user_data['user_id']
 
     add_video(question_id, video_link, title, description, staff_id)
@@ -247,6 +250,7 @@ async def provide_answer(update: Update, context: CallbackContext) -> None:
             f"Your question has been answered.\nTitle: {title}\nDescription: {description}\nLink: {video_link}",
             reply_markup=reply_markup
         )
+
 
 async def handle_feedback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
@@ -420,7 +424,7 @@ def main() -> None:
     application.add_handler(CommandHandler("login", login))
     application.add_handler(CommandHandler("ask", ask_question))
     application.add_handler(CommandHandler("view_pending_questions", view_pending_questions))
-    application.add_handler(CommandHandler("provide_answer", provide_answer))
+    application.add_handler(CommandHandler("provide_videolink", provide_videolink))
     application.add_handler(CommandHandler("create_user", create_user))
     application.add_handler(CommandHandler("create_staff", create_staff))
     application.add_handler(CommandHandler("create_admin", create_admin))
