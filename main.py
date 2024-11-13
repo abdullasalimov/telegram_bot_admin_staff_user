@@ -13,7 +13,7 @@ cursor = db.cursor()
 # Define User Roles and Permissions
 def create_user_or_staff(user_type, phone_number, password):
     if user_type not in ['staff', 'user', 'admin']:
-        raise ValueError("Invalid user type")
+        raise ValueError("Неверный тип пользователя")
 
     table = "Admin" if user_type == 'admin' else ("Staff" if user_type == 'staff' else "User")
     cursor.execute(f"INSERT INTO {table} (phone_number, password) VALUES (%s, %s)", 
@@ -83,42 +83,40 @@ def calculate_similarity(text1, text2):
 
 # Define command handlers
 async def start(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text('Welcome to the bot! Use /login to authenticate. Use /help to see available commands.')
+    await update.message.reply_text('Добро пожаловать! Используйте /login для аутентификации. Используйте /help, чтобы просмотреть доступные команды.')
 
 async def help_command(update: Update, context: CallbackContext) -> None:
     role = context.user_data.get('role')
     if role == 'admin':
         commands = (
-            "/create_user phone_number password\n"
-            "/create_staff phone_number password\n"
-            "/create_admin phone_number password\n"
+            "/create_user <номер телефона> <пароль>\n"
+            "/create_staff <номер телефона> <пароль>\n"
+            "/create_admin <номер телефона> <пароль>\n"
             "/list_users\n"
             "/list_staff\n"
             "/list_admins\n"
-            "/remove_user user_id\n"
-            "/remove_staff staff_id\n"
-            "/remove_admin admin_id"
+            "/remove_user ID пользователя\n"
+            "/remove_staff ID куратора\n"
+            "/remove_admin ID администратора"
         )
     elif role == 'staff':
         commands = (
-            "/login phone_number password\n"
-            "/provide_videolink question_id video_link \"title\" \"description\"\n"
+            "/provide_videolink <ID вопроса> <Ссылка на видео> \"<Название>\" \"<Описание>\"\n"
             "/view_pending_questions\n"
         )
     elif role == 'user':
         commands = (
-            "/login phone_number password\n"
-            "/ask question_text\n"
+            "/ask <Текст вопроса>\n"
         )
     else:
-        commands = "You need to log in first using /login phone_number password."
+        commands = "Сначала вам необходимо войти в систему, используя пароль /login <номер телефона> <пароль>."
 
-    await update.message.reply_text(f"Available commands:\n{commands}")
+    await update.message.reply_text(f"Доступные команды:\n{commands}")
 
 async def login(update: Update, context: CallbackContext) -> None:
     args = context.args
     if len(args) != 2:
-        await update.message.reply_text('Usage: /login <phone_number> <password>')
+        await update.message.reply_text('Использование: /login <номер телефона> <пароль>')
         return
 
     phone_number, password = args
@@ -134,17 +132,17 @@ async def login(update: Update, context: CallbackContext) -> None:
         user_id, role = user
         context.user_data['user_id'] = user_id
         context.user_data['role'] = role
-        await update.message.reply_text(f'Successfully logged in as {role}. Use /help to see available commands.')
+        await update.message.reply_text(f'Успешный вход в систему как {role}. Используйте /help, чтобы просмотреть доступные команды.')
         if role != 'admin':
             cursor.execute(f"UPDATE {role.capitalize()} SET chat_id = %s WHERE id = %s", (update.message.chat_id, user_id))
             db.commit()
             print(f"{role.capitalize()} chat_id {update.message.chat_id} saved for user_id {user_id}")
     else:
-        await update.message.reply_text('Invalid phone number or password.')
+        await update.message.reply_text('Неверный номер телефона или пароль.')
 
 async def ask_question(update: Update, context: CallbackContext) -> None:
     if 'user_id' not in context.user_data or context.user_data.get('role') != 'user':
-        await update.message.reply_text('You must be logged in as a user to ask a question.')
+        await update.message.reply_text('Вы должны войти в систему как пользователь, чтобы задать вопрос.')
         return
 
     question_text = ' '.join(context.args)
@@ -159,11 +157,11 @@ async def ask_question(update: Update, context: CallbackContext) -> None:
         if calculate_similarity(question_text, title) > 60 or calculate_similarity(question_text, description) > 60
     ]
 
-    response_message = f"Your question has been submitted with ID {question_id}."
+    response_message = f"Ваш вопрос был отправлен с ID {question_id}."
     if similar_videos:
-        response_message += "\n\nSimilar videos:\n"
+        response_message += "\n\nПохожие видео:\n"
         for video_id, video_link, title, description in similar_videos:
-            response_message += f"\nTitle: {title}\nDescription: {description}\nLink: {video_link}\n"
+            response_message += f"\nНазвание: {title}\nОписание: {description}\nСсылка: {video_link}\n"
 
     await update.message.reply_text(response_message)
 
@@ -174,7 +172,7 @@ async def ask_question(update: Update, context: CallbackContext) -> None:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
-            f"Do you like this video?\nTitle: {title}\nDescription: {description}\nLink: {video_link}",
+            f"Do you like this video?\nНазвание: {title}\nОписание: {description}\nСсылка: {video_link}",
             reply_markup=reply_markup
         )
 
@@ -187,7 +185,7 @@ async def ask_question(update: Update, context: CallbackContext) -> None:
     else:
         cursor.execute("SELECT chat_id FROM Admin LIMIT 1")
         admin_chat_id = cursor.fetchone()[0]
-        await context.bot.send_message(admin_chat_id, f'No staff available to review question ID: {question_id}\nQuestion: {question_text}')
+        await context.bot.send_message(admin_chat_id, f'No staff available to review question ID: {question_id}\nВопрос: {question_text}')
 
 
 async def view_pending_questions(update: Update, context: CallbackContext) -> None:
@@ -202,7 +200,7 @@ async def view_pending_questions(update: Update, context: CallbackContext) -> No
 
     response_message = "Pending questions:\n"
     for question_id, question_text, created_at in pending_questions:
-        response_message += f"\nID: {question_id}\nQuestion: {question_text}\nAsked on: {created_at}\n"
+        response_message += f"\nID: {question_id}\nВопрос: {question_text}\nAsked on: {created_at}\n"
     await update.message.reply_text(response_message)
 
 import re
@@ -243,7 +241,7 @@ async def provide_videolink(update: Update, context: CallbackContext) -> None:
         reply_markup = InlineKeyboardMarkup(keyboard)
         await context.bot.send_message(
             user_chat_id,
-            f"Your question has been answered.\nTitle: {title}\nDescription: {description}\nLink: {video_link}",
+            f"Your question has been answered.\nНазвание: {title}\nОписание: {description}\nСсылка: {video_link}",
             reply_markup=reply_markup
         )
 
@@ -257,9 +255,9 @@ async def handle_feedback(update: Update, context: CallbackContext) -> None:
     video_id_or_question_id = int(data[1])
     
     if action == 'like':
-        await context.bot.send_message(chat_id=query.message.chat_id, text="Thank you for your feedback!")
+        await context.bot.send_message(chat_id=query.message.chat_id, text="Спасибо за ваш отзыв!")
     elif action == 'dislike':
-        await query.edit_message_text(text="Sorry that the answer was not helpful. We will review your question again.")
+        await query.edit_message_text(text="Извините, что ответ не помог. Мы еще раз рассмотрим ваш вопрос.")
         update_question_status(video_id_or_question_id, 'pending')
         
         # Notify the next staff member
@@ -273,18 +271,18 @@ async def handle_feedback(update: Update, context: CallbackContext) -> None:
         if next_staff_id:
             cursor.execute("SELECT chat_id FROM Staff WHERE id = %s", (next_staff_id,))
             next_staff_chat_id = cursor.fetchone()[0]
-            await context.bot.send_message(next_staff_chat_id, f'Review needed for question (ID: {video_id_or_question_id}): {question_text}')
+            await context.bot.send_message(next_staff_chat_id, f'Требуется отзыв для вопроса (ID: {video_id_or_question_id}): {question_text}')
         else:
             cursor.execute("SELECT chat_id FROM Admin LIMIT 1")
             admin_chat_id = cursor.fetchone()[0]
-            await context.bot.send_message(admin_chat_id, f'No staff available to review question ID: {video_id_or_question_id}\nQuestion: {question_text}')
+            await context.bot.send_message(admin_chat_id, f'Нет кураторов для рассмотрения вопроса ID: {video_id_or_question_id}\nВопрос: {question_text}')
     elif action == 'like_similar':
         question_id = int(data[2])
-        await context.bot.send_message(chat_id=query.message.chat_id, text="Thank you for your feedback! We will use this video for your question.")
+        await context.bot.send_message(chat_id=query.message.chat_id, text="Спасибо за ваш отзыв! Мы будем использовать это видео для вашего вопроса.")
         update_question_status(question_id, 'answered')
     elif action == 'dislike_similar':
         question_id = int(data[2])
-        await query.edit_message_text(text="Sorry that the similar video was not helpful. We will review your question again.")
+        await query.edit_message_text(text="Извините, что подобное видео не помогло. Мы еще раз рассмотрим ваш вопрос.")
         cursor.execute("DELETE FROM Video WHERE id = %s", (video_id_or_question_id,))
         db.commit()
         update_question_status(question_id, 'pending')
@@ -299,118 +297,118 @@ async def handle_feedback(update: Update, context: CallbackContext) -> None:
         else:
             cursor.execute("SELECT chat_id FROM Admin LIMIT 1")
             admin_chat_id = cursor.fetchone()[0]
-            await context.bot.send_message(admin_chat_id, f'No staff available to review question ID: {question_id}\nQuestion: {question_text}')
+            await context.bot.send_message(admin_chat_id, f'Нет кураторов для рассмотрения вопроса ID: {question_id}\nВопрос: {question_text}')
 
 async def create_user(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('You must be logged in as an admin to create users.')
+        await update.message.reply_text('Для создания пользователей вы должны войти в систему как администратор.')
         return
 
     args = context.args
     if len(args) != 2:
-        await update.message.reply_text('Usage: /create_user <phone_number> <password>')
+        await update.message.reply_text('Использование: /create_user <номер телефона> <пароль>')
         return
 
     phone_number, password = args
     create_user_or_staff('user', phone_number, password)
-    await update.message.reply_text('User created successfully.')
+    await update.message.reply_text('Пользователь успешно создан.')
 
 async def create_staff(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('You must be logged in as an admin to create staff.')
+        await update.message.reply_text('Для создания куратора вы должны войти в систему как администратор.')
         return
 
     args = context.args
     if len(args) != 2:
-        await update.message.reply_text('Usage: /create_staff <phone_number> <password>')
+        await update.message.reply_text('Использование: /create_staff <номер телефона> <пароль>')
         return
 
     phone_number, password = args
     create_user_or_staff('staff', phone_number, password)
-    await update.message.reply_text('Staff created successfully.')
+    await update.message.reply_text('Куратор успешно создан.')
 
 async def create_admin(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('You must be logged in as an admin to create admins.')
+        await update.message.reply_text('Вы должны войти в систему как администратор, чтобы создать администраторов..')
         return
 
     args = context.args
     if len(args) != 2:
-        await update.message.reply_text('Usage: /create_admin <phone_number> <password>')
+        await update.message.reply_text('Использование: /create_admin <номер телефона> <пароль>')
         return
 
     phone_number, password = args
     create_user_or_staff('admin', phone_number, password)
-    await update.message.reply_text('Admin created successfully.')
+    await update.message.reply_text('Администратор успешно создан.')
 
 async def list_users(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('You must be logged in as an admin to list users.')
+        await update.message.reply_text('Чтобы получить список пользователей, вы должны войти в систему как администратор.')
         return
 
     users = list_users_or_staff('user')
-    response = "Users:\n" + "\n".join([f"ID: {user_id}, Phone: {phone}" for user_id, phone in users])
+    response = "Пользователи:\n" + "\n".join([f"ID: {user_id}, Тел: {phone}" for user_id, phone in users])
     await update.message.reply_text(response)
 
 async def list_staff(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('You must be logged in as an admin to list staff.')
+        await update.message.reply_text('Вы должны войти в систему как администратор, чтобы составить список кураторов.')
         return
 
     staff = list_users_or_staff('staff')
-    response = "Staff:\n" + "\n".join([f"ID: {staff_id}, Phone: {phone}" for staff_id, phone in staff])
+    response = "Кураторы:\n" + "\n".join([f"ID: {staff_id}, Тел: {phone}" for staff_id, phone in staff])
     await update.message.reply_text(response)
 
 async def list_admins(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('You must be logged in as an admin to list admins.')
+        await update.message.reply_text('Вы должны войти в систему как администратор, чтобы получить список администраторов.')
         return
 
     admins = list_users_or_staff('admin')
-    response = "Admins:\n" + "\n".join([f"ID: {admin_id}, Phone: {phone}" for admin_id, phone in admins])
+    response = "Администраторы:\n" + "\n".join([f"ID: {admin_id}, Тел: {phone}" for admin_id, phone in admins])
     await update.message.reply_text(response)
 
 async def remove_user(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('You must be logged in as an admin to remove users.')
+        await update.message.reply_text('Вы должны войти в систему как администратор, чтобы удалить пользователей.')
         return
 
     args = context.args
     if len(args) != 1:
-        await update.message.reply_text('Usage: /remove_user <user_id>')
+        await update.message.reply_text('Использование: /remove_user <ID пользователя>')
         return
 
     user_id = args[0]
     delete_user_or_staff('user', user_id)
-    await update.message.reply_text(f'User {user_id} removed successfully.')
+    await update.message.reply_text(f'Пользователь {user_id} успешно удален.')
 
 async def remove_staff(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('You must be logged in as an admin to remove staff.')
+        await update.message.reply_text('Вы должны войти в систему как администратор, чтобы удалить куратор.')
         return
 
     args = context.args
     if len(args) != 1:
-        await update.message.reply_text('Usage: /remove_staff <staff_id>')
+        await update.message.reply_text('Использование: /remove_staff <ID куратора>')
         return
 
     staff_id = args[0]
     delete_user_or_staff('staff', staff_id)
-    await update.message.reply_text(f'Staff {staff_id} removed successfully.')
+    await update.message.reply_text(f'Куратор {staff_id} успешно удален.')
 
 async def remove_admin(update: Update, context: CallbackContext) -> None:
     if context.user_data.get('role') != 'admin':
-        await update.message.reply_text('You must be logged in as an admin to remove admins.')
+        await update.message.reply_text('Вы должны войти в систему как администратор, чтобы удалить администраторов.')
         return
 
     args = context.args
     if len(args) != 1:
-        await update.message.reply_text('Usage: /remove_admin <admin_id>')
+        await update.message.reply_text('Использование: /remove_admin <ID Администратора>')
         return
 
     admin_id = args[0]
     delete_user_or_staff('admin', admin_id)
-    await update.message.reply_text(f'Admin {admin_id} removed successfully.')
+    await update.message.reply_text(f'Администратор {admin_id} успешно удален.')
 
 def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
