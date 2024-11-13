@@ -1,17 +1,13 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackContext, CallbackQueryHandler
 import mysql.connector
+from config import DB_CONFIG, BOT_TOKEN
 import re
 from fuzzywuzzy import fuzz
 
 
 # Database connection
-db = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="6067iphone",
-    database="telegram_bot"
-)
+db = mysql.connector.connect(**DB_CONFIG)
 cursor = db.cursor()
 
 # Define User Roles and Permissions
@@ -417,14 +413,21 @@ async def remove_admin(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(f'Admin {admin_id} removed successfully.')
 
 def main() -> None:
-    application = Application.builder().token("7134060419:AAHCcn5_DZ5C8P7a2gu0PhZE--Ij4AN2dbg").build()
-
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    #General commands
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("login", login))
+
+    #User's command
     application.add_handler(CommandHandler("ask", ask_question))
+
+    #Staff's commands
     application.add_handler(CommandHandler("view_pending_questions", view_pending_questions))
     application.add_handler(CommandHandler("provide_videolink", provide_videolink))
+
+    #Admin's commands
     application.add_handler(CommandHandler("create_user", create_user))
     application.add_handler(CommandHandler("create_staff", create_staff))
     application.add_handler(CommandHandler("create_admin", create_admin))
@@ -434,6 +437,7 @@ def main() -> None:
     application.add_handler(CommandHandler("remove_user", remove_user))
     application.add_handler(CommandHandler("remove_staff", remove_staff))
     application.add_handler(CommandHandler("remove_admin", remove_admin))
+    
     application.add_handler(CallbackQueryHandler(handle_feedback))
 
     application.run_polling()

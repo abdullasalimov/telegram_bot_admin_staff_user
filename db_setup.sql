@@ -1,3 +1,7 @@
+CREATE DATABASE IF NOT EXISTS telegram_bot;
+
+USE telegram_bot;
+
 CREATE TABLE IF NOT EXISTS Admin (
     id INT AUTO_INCREMENT PRIMARY KEY,
     phone_number VARCHAR(20) UNIQUE NOT NULL,
