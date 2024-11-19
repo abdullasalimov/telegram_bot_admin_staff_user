@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS Admin (
     id INT AUTO_INCREMENT PRIMARY KEY,
     phone_number VARCHAR(20) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
+    language VARCHAR(5) NOT NULL DEFAULT 'ru',
     chat_id BIGINT
 );
 
@@ -14,6 +15,7 @@ CREATE TABLE IF NOT EXISTS Staff (
     phone_number VARCHAR(20) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     chat_id BIGINT,
+    language VARCHAR(5) NOT NULL DEFAULT 'ru',
     like_count INT DEFAULT 0,
     dislike_count INT DEFAULT 0
 );
@@ -22,6 +24,7 @@ CREATE TABLE IF NOT EXISTS User (
     id INT AUTO_INCREMENT PRIMARY KEY,
     phone_number VARCHAR(20) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
+    language VARCHAR(5) NOT NULL DEFAULT 'ru',
     chat_id BIGINT
 );
 

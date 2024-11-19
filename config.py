@@ -17,3 +17,6 @@ DB_CONFIG = {
 ADMIN_PHONE = os.getenv('ADMIN_PHONE')
 # Hash the initial admin password
 ADMIN_PASSWORD_HASH = generate_password_hash(os.getenv('ADMIN_PASSWORD'))
+
+# Calculate similarity
+SIMILARITY = 60
