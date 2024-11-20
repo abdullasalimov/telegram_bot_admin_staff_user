@@ -15,6 +15,11 @@ cursor = db.cursor()
 # Language dictionary
 LANG_DICT = {
     'en': {
+        'commands': {
+            'admin': "/set_language\n/create_user <phone> <password>\n/create_staff <phone> <password>\n/create_admin <phone> <password>\n/list_users\n/list_staff\n/list_admins\n/remove_user <user ID>\n/remove_staff <staff ID>\n/remove_admin <admin ID>",
+            'staff': "/set_language\n/view_pending_questions\n/provide_videolink <question ID> <video link> \"<Title>\" \"<Description>\"",
+            'user': "/set_language\n/ask <your question>",
+        },
         'welcome': "Welcome! Use /login to authenticate. Use /help to view available commands.",
         'invalid_user_type': "Invalid user type.",
         'use_login': "You must log in first using /login <phone_number> <password>.",
@@ -22,9 +27,6 @@ LANG_DICT = {
         'user_created': "User successfully created.",
         'staff_created': "Staff successfully created.",
         'admin_created': "Admin successfully created.",
-        'user_deleted': "User successfully deleted.",
-        'staff_deleted': "Staff successfully deleted.",
-        'admin_deleted': "Admin successfully deleted.",
         'login_success': "Successfully logged in as {role}. Use /help view commands.",
         'login_failed': "Invalid phone number or password.",
         'question_asked': "Your question has been submitted with ID {id}.",
@@ -76,6 +78,11 @@ LANG_DICT = {
 
     },
     'ru': {
+        'commands': {
+            'admin': "/set_language\n/create_user <телефон> <пароль>\n/create_staff <телефон> <пароль>\n/create_admin <телефон> <пароль>\n/list_users\n/list_staff\n/list_admins\n/remove_user <ID пользователя>\n/remove_staff <ID куратора>\n/remove_admin <ID администратора>",
+            'staff': "/set_language\n/view_pending_questions\n/provide_videolink <ID вопроса> <ссылка на видео> \"<Название>\" \"<Описание>\"",
+            'user': "/set_language\n/ask <ваш вопрос>",
+        },
         'welcome': "Добро пожаловать! Используйте /login для аутентификации. Используйте /help, чтобы просмотреть доступные команды.",
         'invalid_user_type': "Неверный тип пользователя.",
         'use_login': "Сначала вам необходимо войти в систему, используя /login <номер телефона> <пароль>.",
@@ -83,9 +90,6 @@ LANG_DICT = {
         'user_created': "Пользователь успешно создан.",
         'staff_created': "Куратор успешно создан.",
         'admin_created': "Администратор успешно создан.",
-        'user_deleted': "Пользователь успешно удален.",
-        'staff_deleted': "Куратор успешно удален.",
-        'admin_deleted': "Администратор успешно удален.",
         'login_success': "Успешный вход в систему как {role}. Используйте /help, чтобы просмотреть доступные команды.",
         'login_failed': "Неверный номер телефона или пароль.",
         'question_asked': "Ваш вопрос был отправлен с ID {id}.",
@@ -135,6 +139,70 @@ LANG_DICT = {
         'remove_staff_success':"Куратор {staff_id} успешно удален.",        'remove_admin':"Вы должны войти в систему как администратор, чтобы удалить админов.",
         'remove_admin_use':"Использование: /remove_admin <ID админа>",
         'remove_admin_success':"Админ {admin_id} успешно удален.",
+    },
+    'kz': {
+        'commands': {
+            'admin': "/set_language\n/create_user <телефон> <пароль>\n/create_staff <телефон> <пароль>\n/create_admin <телефон> <пароль>\n/list_users\n/list_staff\n/list_admins\n/remove_user <қолданушы ID>\n/remove_staff <қызметкер ID>\n/remove_admin <әкімші ID>",
+            'staff': "/set_language\n/view_pending_questions\n/provide_videolink <сұрақ ID> <бейне сілтеме> \"<Тақырыбы>\" \"<Сипаттама>\"",
+            'user': "/set_language\n/ask <сұрағыңыз>",
+        },
+        'welcome': "Қош келдіңіз! Аутентификация үшін /login пайдаланыңыз. Қол жетімді командаларды көру үшін /help пайдаланыңыз.",
+        'invalid_user_type': "Жарамсыз пайдаланушы түрі.",
+        'use_login': "Алдымен /login <телефон нөмірі> <құпия сөз> арқылы жүйеге кіруіңіз керек.",
+        'invalid_command_usage': "Қолдану: /login <телефон нөмірі> <құпия сөз>.",
+        'user_created': "Пайдаланушы сәтті құрылды.",
+        'staff_created': "Қызметкер сәтті құрылды.",
+        'admin_created': "Администратор сәтті құрылды.",
+        'login_success': "{role} ретінде сәтті кіру. Командаларды көру үшін /help пайдаланыңыз.",
+        'login_failed': "Телефон нөмірі немесе құпия сөз дұрыс емес.",
+        'question_asked': "Сіздің сұрағыңыз ID {id} нөмірімен жіберілді.",
+        'answer_provided': "ID {id} сұрағына жауап берілді.",
+        'thanks_feedback': "Пікіріңіз үшін рахмет!",
+        'help_commands': "Қол жетімді командалар:\n{commands}",
+        'user_role': "Сұрақ қою үшін пайдаланушы ретінде кіруіңіз керек.",
+        'similar_videos': "Ұқсас видеолар",
+        'title': "Атауы",
+        'description': "Сипаттама",
+        'link': "Сілтеме",
+        'do_you_like': "Бұл видео ұнай ма?\nАтауы: {title}\nСипаттама: {description}\nСілтеме: {video_link}",
+        'new_question': "Жаңа сұрақ (ID: {question_id}): {question_text}",
+        'no_staff_review': "ID {question_id} сұрағын қарау үшін қызметкерлер жоқ.\nСұрақ: {question_text}",
+        'staff_login': "Күтілген сұрақтарды көру үшін қызметкер ретінде кіруіңіз керек.",
+        'no_questions': "Күтілген сұрақтар жоқ.",
+        'pending': "Күтілген сұрақтар:\n",
+        'question': "\nID: {question_id}\nСұрақ: {question_text}\nҚойылған күні: {created_at}\n",
+        'staff_login_2': "Сұрақтарға жауап беру үшін қызметкер ретінде кіруіңіз керек.",
+        'usage_provide_videolink': "Қолдану: /provide_videolink <сұрақ ID> <видео сілтеме> \"атауы\" \"сипаттама\"",
+        'answer_question': "ID {question_id} сұрағына жауап берілді.",
+        'answered_question': "Сіздің сұрағыңызға жауап берілді.\nАтауы: {title}\nСипаттама: {description}\nСілтеме: {video_link}",
+        'review_thanks': "Пікіріңіз үшін рахмет!",
+        'answer_no_help': "Кешіріңіз, жауап көмектеспеді. Біз сіздің сұрағыңызды қайта қараймыз.",
+        'review_required': "Сұрақ үшін пікір қажет (ID: {video_id_or_question_id}): {question_text}",
+        'no_staff': "ID {video_id_or_question_id} сұрағын қарау үшін қызметкерлер жоқ.\nСұрақ: {question_text}",
+        'thanks_review': "Пікіріңіз үшін рахмет! Біз осы видеоны сіздің сұрағыңыз үшін пайдаланамыз.",
+        'no_help_video': "Кешіріңіз, бұл видео көмектеспеді. Біз сіздің сұрағыңызды қайта қараймыз.",
+        'no_staff_available': "ID {question_id} сұрағын қарау үшін қызметкерлер жоқ.\nСұрақ: {question_text}.",
+        'admin_login': "Пайдаланушыларды құру үшін әкімші ретінде кіруіңіз керек.",
+        'create_user': "Қолдану: /create_user <телефон нөмірі> <құпия сөз>",
+        'admin_login_staff': "Қызметкерлерді құру үшін әкімші ретінде кіруіңіз керек.",
+        'create_staff': "Қолдану: /create_staff <телефон нөмірі> <құпия сөз>",
+        'admin_login_admin': "Администраторларды құру үшін әкімші ретінде кіруіңіз керек.",
+        'create_admin': "Қолдану: /create_admin <телефон нөмірі> <құпия сөз>",
+        'user_list': "Пайдаланушылар тізімін алу үшін әкімші ретінде кіруіңіз керек.",
+        'users': "Пайдаланушылар:\n",
+        'staff_list': "Қызметкерлер тізімін алу үшін әкімші ретінде кіруіңіз керек.",
+        'staff': "Қызметкерлер:\n",
+        'admin_list': "Администраторлар тізімін алу үшін әкімші ретінде кіруіңіз керек.",
+        'admin': "Администраторлар:\n",
+        'remove_user': "Пайдаланушыларды жою үшін әкімші ретінде кіруіңіз керек.",
+        'remove_user_use': "Қолдану: /remove_user <пайдаланушы ID>.",
+        'remove_user_success': "{user_id} пайдаланушысы сәтті жойылды.",
+        'remove_staff': "Қызметкерлерді жою үшін әкімші ретінде кіруіңіз керек.",
+        'remove_staff_use': "Қолдану: /remove_staff <қызметкер ID>.",
+        'remove_staff_success': "{staff_id} қызметкері сәтті жойылды.",
+        'remove_admin': "Администраторларды жою үшін әкімші ретінде кіруіңіз керек.",
+        'remove_admin_use': "Қолдану: /remove_admin <администратор ID>.",
+        'remove_admin_success': "{admin_id} администраторы сәтті жойылды.",
     }
 }
 
@@ -143,9 +211,12 @@ def get_user_language(context):
     return context.user_data.get('language', 'en')
 
 # Wrapper function for multi-language messages
-def tr(context, key, **kwargs):
-    lang = get_user_language(context)
-    return LANG_DICT[lang].get(key, '').format(**kwargs)
+def tr(context: CallbackContext, key: str, **kwargs) -> str:
+    language = context.user_data.get('language', 'en')  # Default to English
+    text = LANG_DICT.get(language, {}).get(key, LANG_DICT['en'].get(key, key))
+    if isinstance(text, dict):  # For nested keys like 'commands'
+        return text  # Directly return the dictionary if needed
+    return text.format(**kwargs) if kwargs else text
 
 # Define User Roles and Permissions
 def create_user_or_staff(user_type, phone_number, password):
@@ -224,12 +295,10 @@ async def start(update: Update, context: CallbackContext) -> None:
 
 async def help_command(update: Update, context: CallbackContext) -> None:
     role = context.user_data.get('role')
-    commands = {
-        'admin': "/create_user <phone> <password>\n/create_staff <phone> <password>\n/create_admin <phone> <password>\n/list_users\n/list_staff\n/list_admins\n/remove_user <ID user>\n/remove_staff <ID staff>\n/remove_admin <ID admin>",
-        'staff': "/view_pending_questions\n/provide_videolink <ID вопроса> <Video link> \"<Title>\" \"<Description>\"\n",
-        'user': "/ask <your question>",
-    }.get(role, tr(context, 'use_login'))
-    await update.message.reply_text(tr(context, 'help_commands', commands=commands))
+    language = context.user_data.get('language', 'en')  # Default to 'en'
+    localized_commands = LANG_DICT[language]['commands'].get(role, tr(context, 'use_login'))
+    await update.message.reply_text(tr(context, 'help_commands', commands=localized_commands))
+
 
 async def login(update: Update, context: CallbackContext) -> None:
     args = context.args
