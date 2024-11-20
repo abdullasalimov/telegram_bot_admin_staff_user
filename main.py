@@ -30,8 +30,7 @@ LANG_DICT = {
         'login_success': "Successfully logged in as {role}. Use /help view commands.",
         'login_failed': "Invalid phone number or password.",
         'question_asked': "Your question has been submitted with ID {id}.",
-        'answer_provided': "Answer provided for question ID {id}.",
-        'thanks_feedback': "Thank you for your feedback!",
+        # 'thanks_feedback': "Thank you for your feedback!",
         'help_commands': "Available commands:\n{commands}",
         'user_role':"You must log in as a User to ask a question.",
         'similar_videos':"Similar videos",
@@ -93,8 +92,7 @@ LANG_DICT = {
         'login_success': "Успешный вход в систему как {role}. Используйте /help, чтобы просмотреть доступные команды.",
         'login_failed': "Неверный номер телефона или пароль.",
         'question_asked': "Ваш вопрос был отправлен с ID {id}.",
-        'answer_provided': "Ответ предоставлен для вопроса ID {id}.",
-        'thanks_feedback': "Спасибо за ваш отзыв!",
+        # 'thanks_feedback': "Спасибо за ваш отзыв!",
         'help_commands': "Доступные команды:\n{commands}",
         'user_role':"Вы должны войти в систему как пользователь, чтобы задать вопрос.",
         'similar_videos':"Похожие видео",
@@ -156,8 +154,7 @@ LANG_DICT = {
         'login_success': "{role} ретінде сәтті кіру. Командаларды көру үшін /help пайдаланыңыз.",
         'login_failed': "Телефон нөмірі немесе құпия сөз дұрыс емес.",
         'question_asked': "Сіздің сұрағыңыз ID {id} нөмірімен жіберілді.",
-        'answer_provided': "ID {id} сұрағына жауап берілді.",
-        'thanks_feedback': "Пікіріңіз үшін рахмет!",
+        # 'thanks_feedback': "Пікіріңіз үшін рахмет!",
         'help_commands': "Қол жетімді командалар:\n{commands}",
         'user_role': "Сұрақ қою үшін пайдаланушы ретінде кіруіңіз керек.",
         'similar_videos': "Ұқсас видеолар",
@@ -379,6 +376,9 @@ async def ask_question(update: Update, context: CallbackContext) -> None:
 
     # Notify the first staff in ascending order of id
     next_staff_id = get_next_staff_id()
+
+    print(next_staff_id)
+    
     if next_staff_id:
         cursor.execute("SELECT chat_id FROM Staff WHERE id = %s", (next_staff_id,))
         next_staff_chat_id = cursor.fetchone()[0]
@@ -391,17 +391,23 @@ async def ask_question(update: Update, context: CallbackContext) -> None:
 
 async def view_pending_questions(update: Update, context: CallbackContext) -> None:
     if 'user_id' not in context.user_data or context.user_data.get('role') != 'staff':
-        await update.message.reply_text(tr(context,'staff_login'))
+        await update.message.reply_text(tr(context, 'staff_login'))
         return
 
     pending_questions = get_pending_questions()
     if not pending_questions:
-        await update.message.reply_text(tr(context,'no_questions'))
+        await update.message.reply_text(tr(context, 'no_questions'))
         return
 
-    response_message = tr(context,'pending')
+    response_message = tr(context, 'pending')
     for question_id, question_text, created_at in pending_questions:
-        response_message += tr(context,'question',question_id=question_id,question_text=question_text)
+        response_message += tr(
+            context,
+            'question',
+            question_id=question_id,
+            question_text=question_text,
+            created_at=created_at
+        )
     await update.message.reply_text(response_message)
 
 import re
