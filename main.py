@@ -7,7 +7,6 @@ from fuzzywuzzy import fuzz
 from werkzeug.security import check_password_hash
 from werkzeug.security import generate_password_hash
 
-
 # Database connection
 db = mysql.connector.connect(**DB_CONFIG)
 cursor = db.cursor()
@@ -203,9 +202,6 @@ LANG_DICT = {
     }
 }
 
-# Function to get language preference from context
-def get_user_language(context):
-    return context.user_data.get('language', 'en')
 
 # Wrapper function for multi-language messages
 def tr(context: CallbackContext, key: str, **kwargs) -> str:
@@ -363,6 +359,7 @@ async def ask_question(update: Update, context: CallbackContext) -> None:
         response_message += f"\n\n{tr(context,'similar_videos')}:\n"
         for video_id, video_link, title, description in similar_videos:
             response_message += f"\n{tr(context, 'title')}: {title}\n{tr(context, 'description')}: {description}\n{tr(context, 'link')}: {video_link}\n"
+        update_question_status(question_id, 'answered')
 
     await update.message.reply_text(response_message)
 
@@ -372,7 +369,7 @@ async def ask_question(update: Update, context: CallbackContext) -> None:
              InlineKeyboardButton("👎", callback_data=f"dislike_similar:{video_id}:{question_id}")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(tr(context,'do_you_like',title=title,description=description,link=video_link), reply_markup=reply_markup)
+        await update.message.reply_text(tr(context,'do_you_like',title=title,description=description,video_link=video_link), reply_markup=reply_markup)
 
     # Notify the first staff in ascending order of id
     next_staff_id = get_next_staff_id()
@@ -637,22 +634,31 @@ async def handle_language_selection(update: Update, context: CallbackContext) ->
     lang_code = query.data.split(":")[1]
     chat_id = query.message.chat_id
 
-    # Determine user type and update language
-    cursor.execute("SELECT id FROM Admin WHERE chat_id = %s", (chat_id,))
-    if cursor.fetchone():
-        cursor.execute("UPDATE Admin SET language = %s WHERE chat_id = %s", (lang_code, chat_id))
+    # Check if the user's current role is stored in the context
+    if 'role' not in context.user_data:
+        await query.edit_message_text("Ошибка: Роль не указана. / Error: Role not specified.")
+        return
+
+    current_role = context.user_data['role']  # e.g., "admin", "staff", or "user"
+    user_id = context.user_data.get('user_id')
+
+    if current_role == 'admin':
+        cursor.execute("UPDATE Admin SET language = %s WHERE id = %s", (lang_code, user_id))
+    elif current_role == 'staff':
+        cursor.execute("UPDATE Staff SET language = %s WHERE id = %s", (lang_code, user_id))
+    elif current_role == 'user':
+        cursor.execute("UPDATE User SET language = %s WHERE id = %s", (lang_code, user_id))
     else:
-        cursor.execute("SELECT id FROM Staff WHERE chat_id = %s", (chat_id,))
-        if cursor.fetchone():
-            cursor.execute("UPDATE Staff SET language = %s WHERE chat_id = %s", (lang_code, chat_id))
-        else:
-            cursor.execute("SELECT id FROM User WHERE chat_id = %s", (chat_id,))
-            if cursor.fetchone():
-                cursor.execute("UPDATE User SET language = %s WHERE chat_id = %s", (lang_code, chat_id))
+        await query.edit_message_text("Ошибка: Недействительная роль. / Error: Invalid role.")
+        return
 
     # Commit changes
     db.commit()
-    await query.edit_message_text(f"Язык был установлен на: {lang_code.upper()} / Language set to: {lang_code.upper()} / Тіл орнатылды: {lang_code.upper()}")
+
+    # Notify user
+    await query.edit_message_text(
+        f"Язык был установлен на: {lang_code.upper()} / Language set to: {lang_code.upper()} / Тіл орнатылды: {lang_code.upper()}"
+    )
 
 
 def main() -> None:
